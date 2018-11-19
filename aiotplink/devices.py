@@ -44,7 +44,13 @@ TPLINK_BULBS = { 'LB100': {"temperature": False, "colour": False },
                  'KL130': {"temperature": (2500, 9000), "colour": True },
                  'KB100': {"temperature": False, "colour": False },
                  'KB130': {"temperature": (2500, 9000), "colour": True }}
-TPLINK_PLUGS = {
+TPLINK_PLUGS = { 'HS100' : {" led": True, "emeter": False},
+                 'HS103' : {" led": True, "emeter": False},
+                 'HS105' : {" led": False, "emeter": False},
+                 'HS107' : {" led": True, "emeter": False},
+                 'HS110' : {" led": True, "emeter": True},
+                 'KP100' : {" led": False, "emeter": False},
+    }
 
 class TPProtocol(aio.Protocol):
     """The way the TP-Link protocol works, it opens a connection to the device, send a command
@@ -184,7 +190,10 @@ class TPDevice(object):
 
             if scahnge and self.on_change:
                 self.on_change(schange)
-            await aio.sleep(self.hbto)
+            if self.hbto:
+                await aio.sleep(self.hbto)
+            else:
+                break
 
 
 class TPSmartDevice(TPDevice):
