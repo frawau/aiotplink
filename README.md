@@ -7,7 +7,7 @@ Library to communicate with TP-Link Smart Plugs and similar devices
 
 ## About this library
 
-Based on th ework done by [SoftSCheck](https://github.com/softScheck/tplink-smartplug)
+Based on the work done by [SoftSCheck](https://github.com/softScheck/tplink-smartplug)
  and [GadgetReactor](https://github.com/GadgetReactor/pyHS100)
 
 ## Installation
@@ -52,7 +52,7 @@ To make things simple, you create a class with 2 methods, "register" and "unregi
                 dev.stop()
 
 When registering, you get an dictionary with the flatten out info from a TP-Link device, and an address with
-the format (<ip address>, <port>). You can pass those information directly to 'GetDevice' to get the correct object.
+the format (ip address, port). You can pass those information directly to 'GetDevice' to get the correct object.
 
 'GetDevice" is defined like so
 
