@@ -149,7 +149,7 @@ class TPDevice(object):
     def set_name(self, name):
         self._pending_value["name"] = name
         cmd = commands.SetNameCmd(name)
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
+        ign = aio.create_task(self._send_cmd(cmd,self._set_name))
 
 
     async def heartbeat(self):
@@ -213,13 +213,20 @@ class TPSmartDevice(TPDevice):
 
     def led_on(self):
         self._pending_value["led"] = "on"
-        cmd = self.onCmd("on")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
+        cmd = commands.SetLedCmd("on")
+        ign = aio.create_task(self._send_cmd(cmd,self._set_ledstate))
 
     def led_off(self):
         self._pending_value["led"] = "off"
-        cmd = self.onCmd("off")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
+        cmd = commands.SetLedCmd("off")
+        ign = aio.create_task(self._send_cmd(cmd,self._set_ledstate))
+
+    def _set_ledstate(self, val):
+        if not self.online:
+            raise commands.TPLException("Device is offline")
+        if "led" in self._pending_value:
+            self.led = self._pending_value["led"]
+            del(self._pending_value["led"])
 
 class TPLight(TPDevice):
     """Define the light characteristics"""
@@ -248,7 +255,7 @@ class TPLight(TPDevice):
 
     def set_brightness(self, val):
         self._pending_value["brightness"] = val
-        cmd = commands.SetLightStateCmdCmd({"brightness":val})
+        cmd = commands.SetLightStateCmd({"brightness":val})
         ign = aio.create_task(self._send_cmd(cmd,self._set_brightness))
 
 class TPWhiteLight(TPLight):
@@ -268,7 +275,7 @@ class TPWhiteLight(TPLight):
 
     def set_temperature(self, val):
         self._pending_value["temperature"] = val
-        cmd = commands.SetLightStateCmdCmd({"temperature":val})
+        cmd = commands.SetLightStateCmd({"temperature":val})
         ign = aio.create_task(self._send_cmd(cmd,self._set_temperature))
 
 
@@ -293,7 +300,7 @@ class TPColourLight(TPWhiteLight):
         self._pending_value["hue"] = hue
         self._pending_value["saturation"] = saturation
         self._pending_value["brightness"] = value
-        cmd = commands.SetLightStateCmdCmd({"hue":hue,"":saturation,"brightness":value})
+        cmd = commands.SetLightStateCmd({"hue":hue,"":saturation,"brightness":value})
 
 
 def GetDevice(addr,info,hb=HBTIMEOUT,on_change=lambda x: print(x)):

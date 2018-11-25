@@ -124,7 +124,7 @@ class BasicCommand(object):
 
             if "err_code" in thisresp and thisresp["err_code"] != 0:
                 if not ignore:
-                    raise TPLException("Got error %d for command %s" % (thisresp["err_code"],skey))
+                    raise TPLException("Got error %d for command %s" % (thisresp["err_code"],key))
                 else:
                     fullresp[cmd[0]] = ("err_msg" in thisresp and thisresp["err_msg"]) or thisresp["err_code"]
             for skey in thisresp:
@@ -294,7 +294,7 @@ class SetNameCmd(SysCmd):
 
     def __init__(self,val="TP-Link Device"):
         super().__init__()
-        self.cmd[0].append("set_alias")
+        self.cmd[0].append("set_dev_alias")
         self.cmd[0].append("alias")
         self.val[0] = val
 

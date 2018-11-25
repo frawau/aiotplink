@@ -74,6 +74,19 @@ def readin():
                     MyDevices.doi=None
                 else:
                     print("Error: For power you must indicate on or off\n")
+            elif int(lov[0]) == 2:
+                if len(lov) >1:
+                    if lov[1].lower() in ["1","on","true"]:
+                        MyDevices.doi.led_on()
+                    else:
+                        MyDevices.doi.led_off()
+                    MyDevices.doi=None
+                else:
+                    print("Error: For led power you must indicate on or off\n")
+            elif int(lov[0]) == 3:
+                thisname=" ".join([x for x in lov[1:] if x])
+                MyDevices.doi.set_name(thisname)
+                MyDevices.doi=None
             #except:
                 #print ("\nError: Selection must be a number.\n")
         else:
@@ -91,6 +104,8 @@ def readin():
     if MyDevices.doi:
         print("Select Function for {}:".format(MyDevices.doi.name))
         print("\t[1]\tPower (0 or 1)")
+        print("\t[2]\tLED State (0 or 1)")
+        print("\t[3]\t<a name>")
         print("")
         print("\t[0]\tBack to device selection")
     else:
