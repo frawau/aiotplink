@@ -163,6 +163,7 @@ class TPDevice(object):
                 cmd = commands.InfoCmd()
             if self.caps["emeter"]:
                 cmd += commands.GetPowerCmd()
+            resu = {}
             try:
                 resu = await aio.wait_for(self._send_cmd(cmd),timeout=2)
                 wassent = False
@@ -201,6 +202,8 @@ class TPDevice(object):
             else:
                 break
 
+    def stop(self):
+        self.hbto = 0
 
 class TPSmartDevice(TPDevice):
 

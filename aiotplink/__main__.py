@@ -36,14 +36,21 @@ class devices():
         self.doi=None #device of interest
 
     def register(self,info, addr):
-        if "mac" in info and info["mac"] not in self.devices:
-            self.devices[info["mac"]] = aiot.GetDevice(addr,info,hb=10)
+        if "mac" in info and info["mac"].lower() not in self.devices:
+            self.devices[info["mac"].lower()] = aiot.GetDevice(addr,info,hb=10)
         else:
-            self.devices[info["mac"]].addr = addr
+            self.devices[info["mac"].lower()].addr = addr
 
-    def unregister(self,device):
-        if device.mac:
-            del(self.devices[device.mac])
+    def unregister(self,mac):
+        if mac.lower() in self.devices:
+            print ("%s is gone"% self.devices[mac.lower()].name)
+            self.devices[mac.lower()].stop()
+            del(self.devices[mac.lower()])
+
+    def stop(self):
+        for dev in self.devices.values():
+            dev.stop()
+
 
 def readin():
     """Reading from stdin and displaying menu"""
@@ -105,7 +112,7 @@ except Exception as e:
 
 MyDevices= devices()
 loop = aio.get_event_loop()
-discovery = aiot.TPLinkDiscovery(loop, MyDevices.register)
+discovery = aiot.TPLinkDiscovery(loop, MyDevices, repeat=15)
 try:
     loop.add_reader(sys.stdin,readin)
     discovery.start()
@@ -113,8 +120,10 @@ try:
     print("Use Ctrl-C to quit")
     loop.run_forever()
 except:
-    pass
+    print("Exiting at user's request.")
 finally:
+    MyDevices.stop()
     discovery.cleanup()
     loop.remove_reader(sys.stdin)
+    loop.run_until_complete(aio.sleep(10))
     loop.close()

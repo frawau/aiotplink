@@ -31,11 +31,19 @@ DFLTIP = '0.0.0.0'
 
 DISCOVERY_CMD = InfoCmd() + GetPowerCmd()
 
+class DFLTRegistrar(object):
+
+    def register(self, info, addr):
+         print("Registering %s from %s"%(info,addr))
+
+    def unregister(self, mac_addr):
+        print("Unregistering %s"%mac_addr)
+
 class TPLinkDiscovery:
 
-    def __init__(self, loop,register=lambda a,b: print("%s from %s"%(a,b)), repeat=0):
+    def __init__(self, loop,registrar=DFLTRegistrar(), repeat=0):
         self.loop = loop
-        self.register = register
+        self.registrar = registrar
         self.repeat = repeat
         self.known_devices=[]
         self.last_seen = []
@@ -54,15 +62,18 @@ class TPLinkDiscovery:
         if "mac" in response:
             if response["mac"].lower() not in self.known_devices:
                 self.known_devices.append(response["mac"].lower())
-                self.register(response,addr)
+                self.registrar.register(response,addr)
             self.last_seen.append(response["mac"].lower())
 
 
     def broadcast(self):
 
         if not self.done.done():
+            unregister = [ x for x in self.known_devices if x not in self.last_seen]
             self.known_devices = self.last_seen
             self.last_seen = []
+            for x in unregister:
+                self.registrar.unregister(x)
             self.transport.sendto(DISCOVERY_CMD.command[4:], ('255.255.255.255', 9999))
             if self.repeat:
                 self.loop.call_later(self.repeat, self.broadcast)
