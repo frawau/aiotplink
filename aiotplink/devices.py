@@ -24,10 +24,15 @@
 # IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
 
 import asyncio as aio
-import .commands
+from . import commands
 import logging
 import socket
 from struct import pack
+
+try:
+    xx =aio.create_task
+except:
+    aio.create_task = aio.ensure_future
 
 HBTIMEOUT = 30  #Poll the device every 30 secs by default
 logging.getLogger('frawau.aiotplink').addHandler(logging.NullHandler())
@@ -44,12 +49,12 @@ TPLINK_BULBS = { 'LB100': {"temperature": False, "colour": False },
                  'KL130': {"temperature": (2500, 9000), "colour": True },
                  'KB100': {"temperature": False, "colour": False },
                  'KB130': {"temperature": (2500, 9000), "colour": True }}
-TPLINK_PLUGS = { 'HS100' : {" led": True, "emeter": False},
-                 'HS103' : {" led": True, "emeter": False},
-                 'HS105' : {" led": False, "emeter": False},
-                 'HS107' : {" led": True, "emeter": False},
-                 'HS110' : {" led": True, "emeter": True},
-                 'KP100' : {" led": False, "emeter": False},
+TPLINK_PLUGS = { 'HS100' : {"led": True, "emeter": False},
+                 'HS103' : {"led": True, "emeter": False},
+                 'HS105' : {"led": False, "emeter": False},
+                 'HS107' : {"led": True, "emeter": False},
+                 'HS110' : {"led": True, "emeter": True},
+                 'KP100' : {"led": False, "emeter": False},
     }
 
 class TPProtocol(aio.Protocol):
@@ -71,7 +76,7 @@ class TPProtocol(aio.Protocol):
 
     def data_received(self, data):
         self.future.set_result(self.cmd.response(data))
-        logging.debug('We receive: {}'.format(self.future.result()))
+        logging.debug('We received: {}'.format(self.future.result()))
 
     def connection_lost(self, exc):
         logging.debug('The server closed the connection.')
@@ -81,8 +86,8 @@ class TPDevice(object):
     """Define the common characteristics of TP-Link IoT devices"""
 
     def __init__(self, name, addr, hb = HBTIMEOUT, on_change=None):
-        self.name
-        self.addr
+        self.name = name
+        self.addr, self.port  = addr
         self.hbto = hb
         self.state = None # device is on or off
         self.online = True # device is online
@@ -100,10 +105,10 @@ class TPDevice(object):
 
     async def _send_cmd(self, cmd, callb=None):
         async with self._exclusive:
-            loop = aio.get_running_loop()
+            loop = aio.get_event_loop()
             resu = loop.create_future()
-            coro = loop.create_connection(lambda: TPProtocol(loop,cmd,resu),
-                                            self.addr, 9999)
+            coro = loop.create_connection(lambda: TPProtocol(cmd,resu),
+                                            self.addr, self.port)
             t, p = await coro
             try:
                 await resu
@@ -125,12 +130,12 @@ class TPDevice(object):
     def on(self):
         self._pending_value["state"] = "on"
         cmd = self.onCmd("on")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
+        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
 
     def off(self):
         self._pending_value["state"] = "off"
         cmd = self.onCmd("off")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
+        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
 
 
     def _set_name(self, val):
@@ -144,7 +149,7 @@ class TPDevice(object):
     def set_name(self, name):
         self._pending_value["name"] = name
         cmd = commands.SetNameCmd(name)
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
+        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
 
 
     async def heartbeat(self):
@@ -157,7 +162,7 @@ class TPDevice(object):
             else:
                 cmd = commands.InfoCmd()
             if self.caps["emeter"]:
-                cmd += commands.GetPowerCmd
+                cmd += commands.GetPowerCmd()
             try:
                 resu = await aio.wait_for(self._send_cmd(cmd),timeout=2)
                 wassent = False
@@ -175,10 +180,10 @@ class TPDevice(object):
                     self.location = (resu["latitude"], resu["longitude"])
             schange={}
 
-            if "led" in resu and resu["led"} != self.led :
+            if "led" in resu and resu["led"] != self.led :
                 schange["led"] = resu["led"]
                 self.led = resu["led"]
-            if "state" in resu and resu["state"} != self.state :
+            if "state" in resu and resu["state"] != self.state :
                 schange["state"] = resu["state"]
                 self.state = resu["state"]
             if 'current' in resu:
@@ -188,10 +193,11 @@ class TPDevice(object):
                     except:
                         pass
 
-            if scahnge and self.on_change:
+            if schange and self.on_change:
                 self.on_change(schange)
             if self.hbto:
                 await aio.sleep(self.hbto)
+
             else:
                 break
 
@@ -199,26 +205,18 @@ class TPDevice(object):
 class TPSmartDevice(TPDevice):
 
     def __init__(self, name, addr, hb = HBTIMEOUT, on_change=None):
-        super().__init__(self, name, addr, hb, on_change)
+        super().__init__(name, addr, hb, on_change)
         self.caps["emeter"] = True
 
     def led_on(self):
         self._pending_value["led"] = "on"
         cmd = self.onCmd("on")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
+        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
 
     def led_off(self):
         self._pending_value["led"] = "off"
         cmd = self.onCmd("off")
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
-
-    def _set_name(self, val):
-        if not self.online:
-            raise commands.TPLException("Device is offline")
-        if "name" in self._pending_value:
-            self.name = self._pending_value["name"]
-            del(self._pending_value["name"])
-
+        ign = aio.create_task(self._send_cmd(cmd,self._set_state))
 
 class TPLight(TPDevice):
     """Define the light characteristics"""
@@ -242,14 +240,76 @@ class TPLight(TPDevice):
         if not self.online:
             raise commands.TPLException("Device is offline")
         if "brightness" in self._pending_value:
-            self.name = self._pending_value["name"]
-            del(self._pending_value["name"])
+            self.colour["brightness"] = self._pending_value["brightness"]
+            del(self._pending_value["brightness"])
 
-    def set_brightness(self, name):
-        self._pending_value["name"] = name
-        cmd = commands.SetNameCmd(name)
-        ign = aio.create_task(self._send_cmd(cmd,self._set_state)
+    def set_brightness(self, val):
+        self._pending_value["brightness"] = val
+        cmd = commands.SetLightStateCmdCmd({"brightness":val})
+        ign = aio.create_task(self._send_cmd(cmd,self._set_brightness))
+
+class TPWhiteLight(TPLight):
+    """Define the light characteristics"""
+
+    def __init__(self, name, addr, hb = HBTIMEOUT, on_change=None):
+        super().__init__(name, addr, hb, on_change)
+        self.caps["temperature"] = True
+
+    def _set_temperature(self, val):
+        if not self.online:
+            raise commands.TPLException("Device is offline")
+        if "temperature" in self._pending_value:
+            self.colour["temperature"] = self._pending_value["temperature"]
+
+            del(self._pending_value["temperature"])
+
+    def set_temperature(self, val):
+        self._pending_value["temperature"] = val
+        cmd = commands.SetLightStateCmdCmd({"temperature":val})
+        ign = aio.create_task(self._send_cmd(cmd,self._set_temperature))
 
 
 
+class TPColourLight(TPWhiteLight):
+    """Define the light characteristics"""
 
+    def __init__(self, name, addr, hb = HBTIMEOUT, on_change=None):
+        super().__init__(name, addr, hb, on_change)
+        self.caps["colour"] = True
+
+    def _set_colour(self, val):
+        if not self.online:
+            raise commands.TPLException("Device is offline")
+        for key in ["hue","saturation","brightness"]:
+            if key in self._pending_value:
+                self.colour[key] = self._pending_value[key]
+                del(self._pending_value[key])
+
+
+    def set_colour(self, hue, saturation, value):
+        self._pending_value["hue"] = hue
+        self._pending_value["saturation"] = saturation
+        self._pending_value["brightness"] = value
+        cmd = commands.SetLightStateCmdCmd({"hue":hue,"":saturation,"brightness":value})
+
+
+def GetDevice(addr,info,hb=HBTIMEOUT,on_change=lambda x: print(x)):
+    """Based on infos returned from discovery, return a device"""
+    if "model" in info:
+        if info["model"][:2].upper() in ["HS","KP"]:
+            #A plug"
+            if TPLINK_PLUGS[info["model"][:5].upper()]["led"]:
+                return TPSmartDevice(info["name"],addr,hb,on_change)
+            else:
+                return TPDevice(info["name"],addr,hb,on_change)
+        elif info["model"][:2].lower() in ["LB","KL","KB"]:
+            #A Light
+            print("Light {}".format(info["model"]))
+            if TPLINK_BULBS[info["model"][:5].upper()]["colour"]:
+                return TPColourLight(info["name"],addr,hb,on_change)
+            elif TPLINK_BULBS[info["model"][:5].upper()]["temperature"]:
+                return TPWhiteLight(info["name"],addr,hb,on_change)
+            else:
+                return TPLight(info["name"],addr,hb,on_change)
+
+    return None

@@ -24,12 +24,14 @@
 
 import asyncio as aio
 import socket
-from commands import InfoCmd, GetPowerCmd
+from .commands import InfoCmd, GetPowerCmd
 
+DFLTPORT = 9999
+DFLTIP = '0.0.0.0'
 
 DISCOVERY_CMD = InfoCmd() + GetPowerCmd()
 
-class BroadcastProtocol:
+class TPLinkDiscovery:
 
     def __init__(self, loop,register=lambda a,b: print("%s from %s"%(a,b)), repeat=0):
         self.loop = loop
@@ -38,6 +40,7 @@ class BroadcastProtocol:
         self.known_devices=[]
         self.last_seen = []
         self.done= aio.Future()
+        self.discovery = None
 
     def connection_made(self, transport):
         self.transport = transport
@@ -47,7 +50,7 @@ class BroadcastProtocol:
         self.loop.call_soon(self.broadcast)
 
     def datagram_received(self, data, addr):
-        response = DISCOVERY_CMD.response(data,ignore=True) #Ignore errors
+        response = DISCOVERY_CMD.response(data, noskip = True,ignore=True) #Ignore errors
         if "mac" in response:
             if response["mac"].lower() not in self.known_devices:
                 self.known_devices.append(response["mac"].lower())
@@ -56,6 +59,7 @@ class BroadcastProtocol:
 
 
     def broadcast(self):
+
         if not self.done.done():
             self.known_devices = self.last_seen
             self.last_seen = []
@@ -69,13 +73,29 @@ class BroadcastProtocol:
     def close(self):
         if not self.done.done():
             self.done.set_result(True)
-        self.transport.close()
+        self.cleanup()
 
     def connection_lost(self,x):
         self.repeat = 0
         self.close()
 
+    def start(self, listen_ip=DFLTIP, listen_port=DFLTPORT):
+        """Start discovery task."""
+        coro = self.loop.create_datagram_endpoint(
+            lambda: self, local_addr=(listen_ip, listen_port))
 
+        self.discovery = self.loop.create_task(coro)
+        return self.discovery
+
+    def cleanup(self):
+        """Method to call to cleanly terminate the connection to the device.
+        """
+        if self.transport:
+            self.transport.close()
+            self.transport = None
+        if self.discovery:
+            self.discovery.cancel()
+            self.discovery = None
 
 if __name__ == "__main__":
     TIMEOUT = 10
@@ -83,14 +103,14 @@ if __name__ == "__main__":
         await future
 
     loop = aio.get_event_loop()
-    coro = loop.create_datagram_endpoint(
-        lambda: BroadcastProtocol(loop,repeat=TIMEOUT), local_addr=('0.0.0.0', 9999))
-    t,p = loop.run_until_complete(coro)
+    disco = TPLinkDiscovery(loop,repeat=TIMEOUT)
+
     try:
-        loop.run_until_complete(aio.wait([p.done]))
+        xx= disco.start()
+        loop.run_until_complete(aio.wait([disco.done]))
     except:
         print("Exiting cleanly")
-        p.close()
+        disco.close()
         loop.run_until_complete(aio.sleep(TIMEOUT))
     finally:
         loop.close()

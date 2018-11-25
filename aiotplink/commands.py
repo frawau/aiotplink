@@ -106,9 +106,13 @@ class BasicCommand(object):
         self.val = self.val[:-1] + [self._verify_value(val)]
 
 
-    def response(self,data,ignore=False):
+    def response(self,data,noskip=False,ignore=False):
         """Process received data"""
-        resp = json.loads(TPLCodec.decrypt(data))
+        if noskip:
+            sidx=0
+        else:
+            sidx=4
+        resp = json.loads(TPLCodec.decrypt(data[sidx:]))
         fullresp = {}
         for cmd in self.cmd:
             thisresp =resp
@@ -242,7 +246,7 @@ class SetCmd(SysCmd):
         super().__init__()
         self.cmd[0].append("set_relay_state")
         self.cmd[0].append("state")
-        self.val[0] = _verify_value(val)
+        self.val[0] = self._verify_value(val)
 
     def _verify_value(self,val):
         if isinstance(val,str):
@@ -674,11 +678,11 @@ class GetStatsCmd(MeterCmd):
         self.val.update(val)
         return self.val
 
-class GetMonthStatsCmd(MeterCmd, is_light=False):
+class GetMonthStatsCmd(MeterCmd):
 
     description = "Get monthly power usage."
 
-    def __init__(self, is_light=False)):
+    def __init__(self, is_light=False):
         super().__init__(is_light)
         self.cmd[0].append("get_monthstat")
         now = dt.datetime.date()
@@ -800,7 +804,7 @@ class SetLightCmd(SetLightStateCmd):
         super().__init__()
         self.cmd[0].append("set_relay_state")
         self.cmd[0].append("state")
-        self.val[0] = _verify_value(val)
+        self.val[0] = self._verify_value(val)
 
     def _verify_value(self,val):
         if isinstance(val,str):
